@@ -61,7 +61,7 @@ def _openLinks(reports):
     r.raise_for_status()
     return r.text
 
-def _plebString(curr):
+def _plebString(curr, client):
     nonDeleted = []
     for i in range(ceil(len(curr) / 100)):
         r = requests.get(seApiUrl + ';'.join(curr[i*100:(i+1)*100]) + '?site=' \
@@ -111,7 +111,7 @@ def OpenReports(mode, user, client, amount, back, where):
         else:
             msg = ''
             if (where is None) and lowRep:
-                msg, curr = _plebString(curr)
+                msg, curr = _plebString(curr, client)
                 reports = [v for v in reports if v['name'] in curr]
             if where == 'gutty':
                 good = [v for v in reports if not v in ignored]

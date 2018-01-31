@@ -1,4 +1,4 @@
-A simple bot for more convenient review of Natty reports. The main features are convenient opening several reports at the same time, maintaining a personal ignorelist and automatically skipping deleted posts if you are <10k.
+A simple bot for more convenient review of different bot reports. Currently supports Natty and Guttenberg. The main features are convenient opening several reports at the same time, maintaining a personal ignorelist and automatically skipping deleted posts if you are <10k.
 
 The bot currently understands the following commands:
 

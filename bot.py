@@ -41,9 +41,11 @@ def _parseMessage(msg):
     return ' '.join(v for v in temp if not v[0] == '@').lower()
 
 def onMessage(message, client):
-    if str(message.room.id) not in ['111347', '54445']:
+    if isinstance(message, chatexchange.events.MessagePosted) and \
+            str(message.room.id) not in ['111347', '54445']:
         return
-    if isinstance(message, chatexchange.events.MessagePosted) and message.content in ['🚂', '🚆', '🚄']:
+    if isinstance(message, chatexchange.events.MessagePosted) and \
+            message.content in ['🚂', '🚆', '🚄']:
         message.room.send_message('[🚃](https://github.com/SOBotics/Open-Reports)')
         return
 
@@ -76,18 +78,23 @@ def onMessage(message, client):
         if words[0].isdigit():
             mode = 'normal'
             amount = int(words[0])
-            if len(words) > 1:
-                if len(words) > 2 or words[1] not in ['b', 'back']:
-                    return
+            if len(words) > 1 and words[1] in ['b', 'back']:
                 fromTheBack = True
         else:
-            mode = commands[command]
+            mode = commands[words[0]]
+        where = None
+        if 'sentinel' in command:
+            where  = 'sentinel'
+        if 'guttenberg' in command:
+            if where is not None:
+                return
+            where = 'gutty'
     except:
         return
     
     try:
-        message.room.send_message(OpenReports.OpenReports(mode, message.user, client, amount=amount,
-            back=fromTheBack))
+        message.room.send_message(OpenReports.OpenReports(mode, message.user, 
+            client, amount=amount, back=fromTheBack, where=where))
     except Exception as e:
         message.room.send_message('Error occurred: ' + str(e) + ' (cc @Baum)')
         traceback.print_exc()

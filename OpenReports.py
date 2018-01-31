@@ -11,7 +11,8 @@ from math import ceil
 import shelve
 
 apiUrls = {'stackoverflow.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/',
-        'stackexchange.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/au'}
+        'stackexchange.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/au',
+        'copypastor' : 'http://copypastor.sobotics.org/posts/pending'}
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
 socvrAPI = 'http://reports.socvr.org/api/create-report' 
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
@@ -19,15 +20,15 @@ siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askub
 def _pluralize(word, amount):
     return word if amount == 1 else word + 's'
 
-def _getData(host):
-    remote = requests.get(apiUrls[host])
+def _getData(api):
+    remote = requests.get(apiUrls[api])
     remote.raise_for_status()
 
     data = js.loads(remote.text)
-    return data['items']
+    return data['posts'] if api == 'copypastor' else data['items']
 
 def _buildReport(reports):
-    ret = {'botName' : 'OpenReportsScript'}
+    ret = {'botName' : 'OpenReports'}
     posts = []
     for v in reports:
         reasons = ', '.join(r['reasonName'] for r in v['reasons'])
@@ -37,7 +38,21 @@ def _buildReport(reports):
     ret['posts'] = posts
     return ret
 
-def OpenLinks(reports):
+def _openGutty(reports):
+    if len(reports) == 0:
+        return None
+
+    baseURL = 'http://copypastor.sobotics.org/posts/'
+
+    report = {'botName' : 'OpenReports'}
+    report['posts'] = [[{'id':'title', 'name':str(v), 'value':baseURL + str(v), 
+        'specialType':'link'}] for v in reports]
+
+    r = requests.post(socvrAPI, data=js.dumps(report))
+    r.raise_for_status()
+    return r.text
+
+def _openLinks(reports):
     if len(reports) == 0:
         return None
     report = _buildReport(reports)
@@ -46,48 +61,62 @@ def OpenLinks(reports):
     r.raise_for_status()
     return r.text
 
-def OpenReports(mode, user, client, amount=None, back=False):
+def _plebString(curr):
+    nonDeleted = []
+    for i in range(ceil(len(curr) / 100)):
+        r = requests.get(seApiUrl + ';'.join(curr[i*100:(i+1)*100]) + '?site=' \
+                + siteNames[client.host] + '&key=Vhtdwbqa)4HYdpgQlVMqTw((')
+        r.raise_for_status()
+        data = js.loads(r.text)
+        nonDeleted += [str(v['post_id']) for v in data['items']]
+    numDel = len(curr) - len(nonDeleted)
+    if numDel:
+        plopper = randrange(100)
+        plopStr = 'plop' if plopper == 0 else 'pleb'
+        return 'Ignored %s deleted %s (<10k '%(numDel, _pluralize('post', numDel)) \
+                + plopStr + '). ', nonDeleted
+
+def _openSentinel(reports):
+    return _openLinks(reports)
+
+def OpenReports(mode, user, client, amount, back, where):
     userID = user.id
-    lowRep= user.reputation < 10000
+    lowRep = user.reputation < 10000
 
     filename = str(userID) + client.host + '.ignorelist'
-    reports = _getData(client.host)
-    curr = [v['name'] for v in reports]
+    whichIL = 'gutty' if where is 'gutty' else ''
+    source = 'copypastor' if where == 'gutty' else client.host
+    reports = _getData(source)
+    curr = [v['name'] for v in reports] if where != 'gutty' else reports
+
+    if where == 'sentinel':
+        for v in reports:
+            v['link'] = 'https://sentinel.erwaysoftware.com/posts/aid/' + v['name']
 
     with shelve.open(filename) as db:
 
         try:
-            ignored = db['ignored']
-            last = db['last']
+            ignored = db['ignored' + whichIL]
+            last = db['last' + whichIL]
         except:
             ignored = []
             last = []
 
         if mode == 'ignore_rest':
             newIgnored = [v for v in last if v in curr]
-            db['ignored'] = newIgnored
-            db['last'] = last
+            db['ignored' + whichIL] = newIgnored
+            db['last' + whichIL] = last
             msg = str(len(newIgnored)) + ' %s in ignore list.'%_pluralize('report', len(newIgnored))
             return msg
         else:
             msg = ''
-            if lowRep:
-                nonDeleted = []
-                for i in range(ceil(len(curr) / 100)):
-                    r = requests.get(seApiUrl + ';'.join(curr[i*100:(i+1)*100]) + '?site=' \
-                            + siteNames[client.host] + '&key=Vhtdwbqa)4HYdpgQlVMqTw((')
-                    r.raise_for_status()
-                    data = js.loads(r.text)
-                    nonDeleted += [str(v['post_id']) for v in data['items']]
-                numDel = len(curr) - len(nonDeleted)
-                if numDel:
-                    plopper = randrange(100)
-                    plopStr = 'plop' if plopper == 0 else 'pleb'
-                    msg += 'Ignored %s deleted %s (<10k '%(numDel, _pluralize('post', numDel)) \
-                            + plopStr + '). '
-                curr = nonDeleted
+            if (where is None) and lowRep:
+                msg, curr = _plebString(curr)
                 reports = [v for v in reports if v['name'] in curr]
-            good = [v for v in reports if not v['name'] in ignored]
+            if where == 'gutty':
+                good = [v for v in reports if not v in ignored]
+            else:
+                good = [v for v in reports if not v['name'] in ignored]
             numIgnored = len(curr) - len(good)
             if mode == 'fetch_amount':
                 if len(curr) == 0:
@@ -104,14 +133,14 @@ def OpenReports(mode, user, client, amount=None, back=False):
                         good = good[:amount]
                     elif amount < len(good):
                         good = good[len(good) - amount:]
-                goodIds = [v['name'] for v in good]
+                goodIds = [v['name'] for v in good] if where != 'gutty' else good
                 last = [v for v in curr if (v in goodIds) or (v in ignored)]
 
-                db['last'] = last
-                db['ignored'] = ignored
+                db['last' + whichIL] = last
+                db['ignored' + whichIL] = ignored
                 if numIgnored:
                     msg += 'Skipped %s ignored %s. '%(numIgnored, _pluralize('report', numIgnored))
-                report = OpenLinks(good)
+                report = _openLinks(good) if where != 'gutty' else _openGutty(good)
                 if not good:
                     msg += 'All reports have been tended to.'
                 else:

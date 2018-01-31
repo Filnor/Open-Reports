@@ -75,6 +75,7 @@ def _plebString(curr, client):
         plopStr = 'plop' if plopper == 0 else 'pleb'
         return 'Ignored %s deleted %s (<10k '%(numDel, _pluralize('post', numDel)) \
                 + plopStr + '). ', nonDeleted
+    return '', nonDeleted
 
 def _openSentinel(reports):
     return _openLinks(reports)

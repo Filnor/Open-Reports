@@ -9,5 +9,7 @@ The bot currently understands the following commands:
  - 'fetch amount' or 'fa': Tells you, how many unhandled reports there are
  - 'reboot': Restarts the bot
 
+You can append `guttenberg` or `sentinel` to the 'open' or 'fetch amount' commands to have the bot return / consider Guttenberg reports or Sentinel links for Natty reports, respectively. Use `ir guttenberg` to ignore your last unhandled Guttenberg reports.
+
 If you want more filters or sorting facilities, please raise an issue on Github or ping me.
 

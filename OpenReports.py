@@ -14,7 +14,7 @@ apiUrls = {'stackoverflow.com' : 'http://samserver.bhargavrao.com:8000/napi/api/
         'stackexchange.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/au',
         'copypastor' : 'http://copypastor.sobotics.org/posts/pending'}
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
-socvrAPI = 'http://reports.sobotics.org/api/create-report' 
+socvrAPI = 'http://reports.socvr.org/api/create-report' 
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
 
 def _pluralize(word, amount):

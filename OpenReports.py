@@ -14,7 +14,7 @@ apiUrls = {'stackoverflow.com' : 'http://samserver.bhargavrao.com:8000/napi/api/
         'stackexchange.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/au',
         'copypastor' : 'http://copypastor.sobotics.org/posts/pending'}
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
-socvrAPI = 'http://reports.sobotics.org/api/create-report' 
+socvrAPI = 'http://reports.sobotics.org/api/v2/report/create'
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
 
 def _pluralize(word, amount):
@@ -28,14 +28,14 @@ def _getData(api):
     return data['posts'] if api == 'copypastor' else data['items']
 
 def _buildReport(reports):
-    ret = {'botName' : 'OpenReports'}
+    ret = {'appName' : 'OpenReports', 'appURL' : 'https://github.com/SOBotics/Open-Reports'}
     posts = []
     for v in reports:
         reasons = ', '.join(r['reasonName'] for r in v['reasons'])
-        posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'specialType':'link'},
-            {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},
-            {'id':'reasons', 'name':'Reasons', 'value':reasons}])
-    ret['posts'] = posts
+        posts.append({'fields' :[{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'Link'},
+            {'id':'score', 'name':'NAA Score', 'value':v['naaValue'], 'type':0},
+            {'id':'reasons', 'name':'Reasons', 'value':reasons, 'type':0}]})
+    ret['records'] = posts
     return ret
 
 def _openGutty(reports):
@@ -57,9 +57,10 @@ def _openLinks(reports):
         return None
     report = _buildReport(reports)
     
-    r = requests.post(socvrAPI, data=js.dumps(report))
+    r = requests.post(socvrAPI, json=report)
     r.raise_for_status()
-    return r.text
+    res = r.json()
+    return res['reportURL']
 
 def _plebString(curr, client):
     nonDeleted = []

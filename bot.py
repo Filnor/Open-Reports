@@ -57,6 +57,8 @@ def onMessage(message, client):
         userID = message.user.id
         command = _parseMessage(message.content)
         words = command.split()
+        if not words:
+            return
         if command == 'reboot open':
             os._exit(1)
         if command == 'update open':

@@ -10,8 +10,8 @@ from argparse import ArgumentParser
 from math import ceil
 import shelve
 
-apiUrls = {'stackoverflow.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/',
-        'stackexchange.com' : 'http://samserver.bhargavrao.com:8000/napi/api/reports/all/au',
+apiUrls = {'stackoverflow.com' : 'http://logs.sobotics.org/napi/api/reports/all',
+        'stackexchange.com' : 'http://logs.sobotics.org/napi/api/reports/all/au',
         'copypastor' : 'http://copypastor.sobotics.org/posts/pending'}
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
 socvrAPI = 'http://reports.socvr.org/api/create-report' 

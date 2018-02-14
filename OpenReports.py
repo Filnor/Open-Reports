@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Creates a socvr report with all unhandled Natty reports and maintains an ignore list
 
 import requests
@@ -12,9 +10,9 @@ import shelve
 
 apiUrls = {'stackoverflow.com' : 'http://logs.sobotics.org/napi/api/reports/all',
         'stackexchange.com' : 'http://logs.sobotics.org/napi/api/reports/all/au',
-        'copypastor' : 'http://copypastor.sobotics.org/posts/pending'}
+        'copypastor' : 'http://copypastor.sobotics.org/posts/pending?reasons=true'}
+socvrAPI = 'http://reports.sobotics.org/api/v2/report/create'
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
-socvrAPI = 'http://reports.socvr.org/api/create-report' 
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
 
 def _pluralize(word, amount):
@@ -28,14 +26,14 @@ def _getData(api):
     return data['posts'] if api == 'copypastor' else data['items']
 
 def _buildReport(reports):
-    ret = {'botName' : 'OpenReports'}
+    ret = {'appName' : 'OpenReports', 'appURL' : 'https://github.com/SOBotics/Open-Reports'}
     posts = []
     for v in reports:
         reasons = ', '.join(r['reasonName'] for r in v['reasons'])
-        posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'specialType':'link'},
+        posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'Link'},
             {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},
             {'id':'reasons', 'name':'Reasons', 'value':reasons}])
-    ret['posts'] = posts
+    ret['fields'] = posts
     return ret
 
 def _openGutty(reports):
@@ -44,22 +42,32 @@ def _openGutty(reports):
 
     baseURL = 'http://copypastor.sobotics.org/posts/'
 
-    report = {'botName' : 'OpenReports'}
-    report['posts'] = [[{'id':'title', 'name':str(v), 'value':baseURL + str(v), 
-        'specialType':'link'}] for v in reports]
-
-    r = requests.post(socvrAPI, data=js.dumps(report))
+    report = {'appName' : 'OpenReports', 'appURL' : 'https://github.com/SOBotics/Open-Reports'}
+    items = []
+    for r in reports:
+        idStr = str(r['post_id'])
+        items.append([
+            {'id':'title', 'name': 'Report #' + idStr,
+                'value':baseURL + idStr, 'type':'link'},
+            {'id':'postOne', 'name':r['title_one'],
+                'value':r['url_one'] + ' by ' + r['username_one']},
+            {'id':'postTwo', 'name':r['title_two'],
+                'value':r['url_two'] + ' by ' + r['username_two']}])
+    report['fields'] = items
+    r = requests.post(socvrAPI, json=report)
     r.raise_for_status()
-    return r.text
+    res = r.json()
+    return res['reportURL']
 
 def _openLinks(reports):
     if len(reports) == 0:
         return None
     report = _buildReport(reports)
     
-    r = requests.post(socvrAPI, data=js.dumps(report))
+    r = requests.post(socvrAPI, json=report)
     r.raise_for_status()
-    return r.text
+    res = r.json()
+    return res['reportURL']
 
 def _plebString(curr, client):
     nonDeleted = []
@@ -88,7 +96,8 @@ def OpenReports(mode, user, client, amount, back, where):
     whichIL = 'gutty' if where is 'gutty' else ''
     source = 'copypastor' if where == 'gutty' else client.host
     reports = _getData(source)
-    curr = [v['name'] for v in reports] if where != 'gutty' else reports
+    curr = [v['name'] for v in reports] if where != 'gutty' \
+            else [v['post_id'] for v in reports]
 
     if where == 'sentinel':
         for v in reports:

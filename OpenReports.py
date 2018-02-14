@@ -4,6 +4,7 @@ import requests
 import json as js
 import webbrowser
 from random import randrange
+from datetime import datetime
 from argparse import ArgumentParser
 from math import ceil
 import shelve
@@ -30,9 +31,14 @@ def _buildReport(reports):
     posts = []
     for v in reports:
         reasons = ', '.join(r['reasonName'] for r in v['reasons'])
-        posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'Link'},
+        # Timestamp is in ms for some reason
+        d = datetime.utcfromtimestamp(v['timestamp'] / 1000)
+        date = d.isoformat(timespec='seconds')
+
+        posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'link'},
             {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},
-            {'id':'reasons', 'name':'Reasons', 'value':reasons}])
+            {'id':'reasons', 'name':'Reasons', 'value':reasons},
+            {'id':'date', 'name':'Date', 'value':date, 'type':'date'}])
     ret['fields'] = posts
     return ret
 

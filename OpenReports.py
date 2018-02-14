@@ -33,7 +33,7 @@ def _buildReport(reports):
         reasons = ', '.join(r['reasonName'] for r in v['reasons'])
         # Timestamp is in ms for some reason
         d = datetime.utcfromtimestamp(v['timestamp'] / 1000)
-        date = d.isoformat(timespec='seconds')
+        date = d.isoformat()
 
         posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'link'},
             {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},

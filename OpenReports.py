@@ -12,7 +12,7 @@ import shelve
 apiUrls = {'stackoverflow.com' : 'http://logs.sobotics.org/napi/api/reports/all',
         'stackexchange.com' : 'http://logs.sobotics.org/napi/api/reports/all/au',
         'copypastor' : 'http://copypastor.sobotics.org/posts/pending?reasons=true'}
-socvrAPI = 'http://reports.sobotics.org/api/v2/report/create'
+socvrAPI = 'https://reports.sobotics.org/api/v2/report/create'
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
 

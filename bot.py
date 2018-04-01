@@ -85,9 +85,9 @@ def onMessage(message, client):
         else:
             mode = commands[words[0]]
         where = None
-        if 'sentinel' in command:
+        if 'sentinel' in words or 's' in words:
             where  = 'sentinel'
-        if 'guttenberg' in command:
+        if 'guttenberg' in words or 'g' in words:
             if where is not None:
                 return
             where = 'gutty'

@@ -46,7 +46,7 @@ def onMessage(message, client):
         return
     if isinstance(message, chatexchange.events.MessagePosted) and \
             message.content in ['🚂', '🚆', '🚄']:
-        message.room.send_message('[🚃](https://github.com/SOBotics/Open-Reports)')
+        message.room.send_message('[🚃](https://youtu.be/qmhe9bm8SoE)')
         return
 
     amount = None

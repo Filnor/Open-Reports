@@ -8,8 +8,9 @@ The bot currently understands the following commands:
  - 'dil' or 'delete ignorelist': Delete your ignorelist
  - 'fetch amount' or 'fa': Tells you, how many unhandled reports there are
  - 'reboot': Restarts the bot
+ 
+ *This command list is not up to date. Use the `commands open` command to get a correct list of commands.*
 
 You can append `guttenberg` or `sentinel` to the 'open' or 'fetch amount' commands to have the bot return / consider Guttenberg reports or Sentinel links for Natty reports, respectively. Use `ir guttenberg` to ignore your last unhandled Guttenberg reports.
 
 If you want more filters or sorting facilities, please raise an issue on Github or ping me.
-

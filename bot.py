@@ -1,131 +1,281 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import getpass
-import logging
-import logging.handlers
 import os
-import OpenReports
-import time
+import sys
 import traceback
-from subprocess import call
-from threading import Thread
 
-import chatexchange.client
-import chatexchange.events
+import git
 
-rooms = [
-    {
-        'hostID' : 'stackoverflow.com',
-        'roomID' : '111347',
-    },
-    {
-        'hostID' : 'stackexchange.com',
-        'roomID' : '54445',
-    }
-]
+import chatexchange
+import openreports.se_api as stackexchange_api
+from chatexchange.chatexchange.client import Client
+from chatexchange.chatexchange.events import MessagePosted, MessageEdited
+from openreports.logger import main_logger
+from openreports.open_reports import OpenReports
+from openreports.locations import Locations
+from openreports.utils import utils, Struct
 
-commands = {'o':'normal', 'open':'normal', 'ir':'ignore_rest', 'ignore rest':'ignore_rest',
-        'fa':'fetch_amount', 'fetch amount':'fetch_amount'}
+#Import config file with custom error message
+try:
+    import config as config
+except ModuleNotFoundError:
+    raise Exception("The config module couldn't be imported. Have you renamed config.example.py to config.py?")
 
-helpmessage = \
-        '    o, open:                    Open all reports not on ignore list\n' + \
-        '    `number` [b[back]]:         Open up to `number` reports, fetch from the back of the list if b or back is present\n' + \
-        '    ir, ignore rest:            Put all unhandled reports from you last querry on your ignore list\n' + \
-        '    fa, fetch amount:           Display the number of unhandled reports\n' + \
-        '    dil, delete ignorelist:     Delete your ignorelist\n' + \
-        '    reboot open:                Restart the open reports bot'
+utils = utils()
 
-def _parseMessage(msg):
-    temp = msg.split()
-    return ' '.join(v for v in temp if not v[0] == '@').lower()
+def main():
+    """
+    Main thread of the bot
+    """
+    debug_mode = False
 
-def onMessage(message, client):
-    if isinstance(message, chatexchange.events.MessagePosted) and \
-            str(message.room.id) not in ['111347', '54445']:
+    #Get config for the mode (debug/prod)
+    try:
+        if sys.argv[1] == "--debug":
+            print("Using debug config.")
+            utils.config = Struct(**config.debug_config)
+            debug_mode = True
+        else:
+            raise IndexError
+    except IndexError:
+        print("Using productive config. \nIf you intended to use the debug config, use the '--debug' command line option")
+        utils.config = Struct(**config.prod_config)
+
+    #Set version
+    utils.config.botVersion = "v2.0 DEV"
+
+    #Initialize SE API class instance
+    utils.se_api = stackexchange_api.se_api(utils.config.stackExchangeApiKey)
+
+    try:
+        #Login and connection to chat
+        print("Logging in and joining chat room...")
+        utils.room_number = utils.config.room
+        client = Client(utils.config.chatHost)
+        client.login(utils.config.email, utils.config.password)
+        utils.client = client
+        room = client.get_room(utils.config.room)
+        try:
+            room.join()
+        except ValueError as e:
+            if str(e).startswith("invalid literal for int() with base 10: 'login?returnurl=http%3a%2f%2fchat.stackoverflow.com%2fchats%2fjoin%2ffavorite"):
+                raise chatexchange.chatexchange.browser.LoginError("Too many recent logins. Please wait a bit and try again.")
+
+        room.watch_socket(on_message)
+        print(room.get_current_user_names())
+        utils.room_owners = room.owners
+
+        main_logger.info(f"Joined room '{room.name}' on {utils.config.chatHost}")
+
+        if debug_mode:
+            room.send_message(f"[ [OpenReports](https://git.io/fpszU) ] {utils.config.botVersion} started in debug mode on {utils.config.botOwner}/{utils.config.botMachine}.")
+        else:
+            room.send_message(f"[ [OpenReports](https://git.io/fpszU) ] {utils.config.botVersion} started on {utils.config.botOwner}/{utils.config.botMachine}.")
+
+
+        while True:
+            message = input()
+
+            if message in ["restart", "reboot"]:
+                os._exit(1)
+            else:
+                room.send_message(message)
+
+    except KeyboardInterrupt:
+        os._exit(0)
+    except BaseException as e:
+        print(e)
+        os._exit(1)
+
+def on_message(message, client):
+    """
+    Handling the event if a message was posted or edited
+    """
+
+    if not isinstance(message, MessagePosted) and not isinstance(message, MessageEdited):
+        #We ignore events that aren't MessagePosted or MessageEdited events.
         return
-    if isinstance(message, chatexchange.events.MessagePosted) and \
-            message.content in ['🚂', '🚆', '🚄']:
-        message.room.send_message('[🚃](https://youtu.be/qmhe9bm8SoE)')
+
+    #Check that the message object is defined
+    if message is None or message.content is None:
+        try:
+            if message.user.id is 6294609 or message.user.id is client.get_me().id: #Don't handle self-messages and messages by Queen (Causes bugs from the comment deletion)
+                return
+        except AttributeError:
+            main_logger.warning("ChatExchange message object or content property is None.")
+            main_logger.warning(message)
         return
+
+    #Get message as full string and as single words
+    words = message.content.split()
+
+    #Check for non-alias-command calls
+    if message.content.startswith("🚂") or message.content.startswith("🚆") or message.content.startswith("🚄"):
+        utils.log_command("train")
+        utils.post_message("[🚃](https://youtu.be/qmhe9bm8SoE)")
+    elif message.content.lower().startswith("@bots alive"):
+        utils.log_command("@bots alive")
+        utils.post_message("[open] Yes.")
+
+    #Check if alias is valid
+    if not utils.alias_valid(words[0]):
+        return
+
+    #Check if command is not set
+    if len(words) <= 1:
+        message.reply_to("Huh?")
+        return
+
+    #Store command in it's own variable
+    command = words[1]
+    full_command = ' '.join(words[1:])
+    utils.log_command(full_command)
 
     amount = None
-    fromTheBack = False
+    from_the_back = False
+
     try:
-        if message.target_user_id != client.get_me().id:
-            return
-        userID = message.user.id
-        command = _parseMessage(message.content)
-        words = command.split()
-        if not words:
-            return
-        if command == 'reboot open':
-            os._exit(1)
-        if command == 'update open':
-            call(['git', 'pull'])
-            os._exit(1)
-        if command in ['a', 'alive']:
-            message.room.send_message('[open] Yes.')
-            return
-        if command in ['dil', 'delete ignorelist']:
-            os.remove(str(userID) + client.host + '.ignorelist.db')
-            message.room.send_message('Ignorelist deleted.')
-            return
-        if command in ['commands open', 'commands openreports']:
-            message.room.send_message(helpmessage)
-            return
-        if command == 'commands':
-            message.room.send_message('[open] Try `commands open`')
-            return
-        if words[0].isdigit():
+        #Here are the commands defined
+        if command in ["poof"]:
+            msg = client.get_message(message.parent_message_id)
+            if msg is not None:
+                if utils.is_privileged(message):
+                    msg.delete()
+                else:
+                    message.reply_to("This command is restricted to moderators, room owners and maintainers.")
+        elif command in ["amiprivileged", "privs"]:
+            if utils.is_privileged(message):
+                message.reply_to("You are privileged.")
+            else:
+                message.reply_to(f"You are not privileged. Ping {utils.config.botOwner} if that doesn't makes sense to you.")
+        elif command in ["a", "alive"]:
+            utils.post_message("[open] Yes.")
+        elif command in ["v", "version"]:
+            message.reply_to(f"[open] Current version is {utils.config.botVersion}")
+        elif command in ["loc", "location"]:
+            message.reply_to(f"[open] This instance is running on {utils.config.botOwner}/{utils.config.botMachine}")
+        elif command in ["kill open", "stop open"]:
+            main_logger.warning(f"Stop requested by {message.user.name}")
+
+            if utils.is_privileged(message):
+                try:
+                    utils.post_message("Cya! \o")
+                    utils.client.get_room(utils.room_number).leave()
+                except BaseException:
+                    pass
+                raise os._exit(0)
+            else:
+                message.reply_to("This command is restricted to moderators, room owners and maintainers.")
+        elif full_command in ["standby open"]:
+            main_logger.warning(f"Leave requested by {message.user.name}")
+
+            # Restrict function to (site) moderators, room owners and maintainers
+            if utils.is_privileged(message):
+                utils.post_message("Cya! \o")
+                utils.client.get_room(utils.room_number).leave()
+            else:
+                message.reply_to("This command is restricted to moderators, room owners and maintainers.")
+        elif full_command in ["reboot open"]:
+            main_logger.warning(f"Reboot requested by {message.user.name}")
+
+            if utils.is_privileged(message):
+                try:
+                    utils.post_message("Rebooting now...")
+                    utils.client.get_room(utils.room_number).leave()
+                except BaseException:
+                    pass
+                raise os._exit(1)
+            else:
+                message.reply_to("This command is restricted to moderators, room owners and maintainers.")
+        elif full_command in ["commands open", "commands openreports", "help open", "help openreports"]:
+            utils.post_message("    ### OpenReports commands ###\n" + \
+                               "    o[pen]                   - Open all reports not on ignore list.\n" + \
+                               "    <number>                 - Open up to `number` reports.\n" + \
+                               "    <number> b[ack]          - Open up to `number` reports, fetch from the back of the list (newest reports first)\n" + \
+                               "    ignore rest, ir         - Put all unhandled reports from you last query on your ignore list\n" + \
+                               "    fetch amount, fa         - Display the number of unhandled reports.\n" + \
+                               "    dil, delete ignorelist   - Delete your ignorelist.\n" + \
+                               "    poof                     - Deletes the message replied to, if possible. Requires privileges.\n" + \
+                               "    amiprivileged, privs     - Checks if you're allowed to run privileged commands, like restarting or stopping the bot.\n" + \
+                               "    a[live]                  - Replies with a message if the bot is running.\n" + \
+                               "    v[ersion]                - Returns current version.\n" + \
+                               "    loc[ation]               - Returns current location where the bot is running.\n" + \
+                               "    kill open, stop open     - Stops the bot. Requires privileges.\n" + \
+                               "    standby open             - Tells the bot to go to standby mode. That means it leaves the chat room and a bot maintainer needs to issue a restart manually. Requires privileges.\n" + \
+                               "    reboot open              - Restarts the bot. Requires privileges.\n" + \
+                               "    commands, help           - This command. Lists all available commands.\n" + \
+                               "    status                   - Returns how long the bot is running\n" + \
+                               "    update                   - Updates the bot to the latest git commit and restarts it. Requires owner privileges.", log_message=False, length_check=False)
+        elif command in ["help", "commands"]:
+            message.reply_to("[open] Try `commands open`")
+        elif command in ["commands"]:
+            message.reply_to(f"[open] Try `commands open`")
+        elif command in ["status"]:
+            utils.post_message("    ### OpenReports status ###\n" + \
+                              f"    uptime         {utils.get_uptime()}\n" + \
+                              f"    location       {utils.config.botOwner}/{utils.config.botMachine}\n" + \
+                              f"    version        {utils.config.botVersion}", log_message=False, length_check=False)
+        elif full_command in ["update open"]:
+            if utils.is_privileged(message, owners_only=True):
+                try:
+                    repo = git.Repo(".")
+                    repo.git.reset("--hard", "origin/master")
+                    g = git.cmd.Git(".")
+                    g.pull()
+                    main_logger.info("Update completed, restarting now.")
+                    os._exit(1)
+                except BaseException as e:
+                    main_logger.error(f"Error while updating: {e}")
+                    pass
+                os._exit(1)
+            else:
+                message.reply_to("This command is restricted to bot owners.")
+        elif full_command in ["dil", "delete ignorelist"]:
+            try:
+                os.remove(f"{message.user.id}{client.host}.ignorelist.db")
+                message.reply_to("Your ignorelist is deleted.")
+            except OSError:
+                message.reply_to("You don't seem to have a ignorelist currently.")
+        elif command.isdigit():
             mode = 'normal'
-            amount = int(words[0])
-            if len(words) > 1 and words[1] in ['b', 'back']:
-                fromTheBack = True
-        else:
-            mode = commands[words[0]]
-        where = None
-        if 'sentinel' in words or 's' in words:
-            where  = 'sentinel'
-        if 'guttenberg' in words or 'g' in words:
-            if where is not None:
-                return
-            where = 'gutty'
-    except:
-        return
-    
-    try:
-        message.room.send_message(OpenReports.OpenReports(mode, message.user, 
-            client, amount=amount, back=fromTheBack, where=where))
-    except Exception as e:
-        message.room.send_message('Error occurred: ' + str(e) + ' (cc @Baum)')
-        traceback.print_exc()
+            amount = int(command)
+            if len(words) > 3 and words[2] in ['b', 'back']:
+                from_the_back = True
+                #Class method call
+        elif full_command in ["o", "open", "ir", "ignore rest", "fa", "fetch amount"]:
+            utils.post_message("This command is currently not available due to refactoring")
 
-def WatchRoom(mail, password, room):
-    client = chatexchange.client.Client(room['hostID'])
-    client.login(email, password)
+            location = Locations.Natty
+            if 'sentinel' in words or 's' in words:
+                location = Locations.Sentinel
+            if 'guttenberg' in words or 'g' in words:
+                if location is Locations.Natty:
+                    location = Locations.Guttenberg
 
-    room = client.get_room(room['roomID'])
-    room.join()
-    room.send_message('[open] Hi o/')
+            #reports = OpenReports(utils.client.get_me(), utils, amount, from_the_back, utils.client.host, location)
 
-    watcher = room.watch_socket(onMessage)
+            if command in ["o", "open"]:
+                pass
+            elif command in ["ir", "ignore rest"]:
+                pass
+            elif command in ["fa", "fetch amount"]:
+                pass
 
-    return client, room, watcher
+    except BaseException as e:
+        main_logger.error(f"CRITICAL ERROR: {e}")
+        if message is not None:
+            try:
+                if message.îd is not None:
+                    main_logger.error(f"Caused by message id {message.id}")
+            except AttributeError:
+                pass
+            main_logger.error(traceback.format_exc())
+        try:
+            utils.post_message(f"Error on processing the last command ({e}); rebooting instance... (cc @{utils.config.botOwner})")
+            os._exit(1)
 
-if 'ChatExchangeU' in os.environ:
-    email = os.environ['ChatExchangeU']
-else:
-    email = input("Email: ")
-if 'ChatExchangeP' in os.environ:
-    password = os.environ['ChatExchangeP']
-else:
-    password = input("Password: ")
+        except AttributeError:
+            os._exit(1)
+            pass
 
 
-while True:
-    watchers = [WatchRoom(email, password, r) for r in rooms]
-    for w in watchers:
-        w[2].thread.join()
-
-
+if __name__ == '__main__':
+    main()

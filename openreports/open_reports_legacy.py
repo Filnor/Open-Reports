@@ -2,16 +2,21 @@
 
 import requests
 import json as js
-import webbrowser
 from random import randrange
 from datetime import datetime
-from argparse import ArgumentParser
 from math import ceil
 import shelve
 
+"""
+
+DO NOT USE THIS!
+This file only holds deprecated code from old versions
+
+"""
+
 apiUrls = {'stackoverflow.com' : 'http://logs.sobotics.org/napi/api/reports/all',
-        'stackexchange.com' : 'http://logs.sobotics.org/napi/api/reports/all/au',
-        'copypastor' : 'http://copypastor.sobotics.org/posts/pending?reasons=true'}
+           'stackexchange.com' : 'http://logs.sobotics.org/napi/api/reports/all/au',
+           'copypastor' : 'http://copypastor.sobotics.org/posts/pending?reasons=true'}
 socvrAPI = 'https://reports.sobotics.org/api/v2/report/create'
 seApiUrl = 'https://api.stackexchange.com/2.2/posts/'
 siteNames = {'stackoverflow.com' : 'stackoverflow', 'stackexchange.com' : 'askubuntu'}
@@ -36,9 +41,9 @@ def _buildReport(reports):
         date = d.isoformat()
 
         posts.append([{'id':'title', 'name':v['name'], 'value':v['link'], 'type':'link'},
-            {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},
-            {'id':'reasons', 'name':'Reasons', 'value':reasons},
-            {'id':'date', 'name':'Date', 'value':date, 'type':'date'}])
+                      {'id':'score', 'name':'NAA Score', 'value':v['naaValue']},
+                      {'id':'reasons', 'name':'Reasons', 'value':reasons},
+                      {'id':'date', 'name':'Date', 'value':date, 'type':'date'}])
     ret['fields'] = posts
     return ret
 
@@ -54,11 +59,11 @@ def _openGutty(reports):
         idStr = str(r['post_id'])
         items.append([
             {'id':'title', 'name': 'Report #' + idStr,
-                'value':baseURL + idStr, 'type':'link'},
+             'value':baseURL + idStr, 'type':'link'},
             {'id':'postOne', 'name':r['title_one'],
-                'value':r['url_one'] + ' by ' + r['username_one']},
+             'value':r['url_one'] + ' by ' + r['username_one']},
             {'id':'postTwo', 'name':r['title_two'],
-                'value':r['url_two'] + ' by ' + r['username_two']}])
+             'value':r['url_two'] + ' by ' + r['username_two']}])
     report['fields'] = items
     r = requests.post(socvrAPI, json=report)
     r.raise_for_status()
@@ -69,7 +74,7 @@ def _openLinks(reports):
     if len(reports) == 0:
         return None
     report = _buildReport(reports)
-    
+
     r = requests.post(socvrAPI, json=report)
     r.raise_for_status()
     res = r.json()
@@ -79,7 +84,7 @@ def _plebString(curr, client):
     nonDeleted = []
     for i in range(ceil(len(curr) / 100)):
         r = requests.get(seApiUrl + ';'.join(curr[i*100:(i+1)*100]) + '?site=' \
-                + siteNames[client.host] + '&key=Vhtdwbqa)4HYdpgQlVMqTw((')
+                         + siteNames[client.host] + '&key=Vhtdwbqa)4HYdpgQlVMqTw((')
         r.raise_for_status()
         data = js.loads(r.text)
         nonDeleted += [str(v['post_id']) for v in data['items']]
@@ -88,7 +93,7 @@ def _plebString(curr, client):
         plopper = randrange(100)
         plopStr = 'plop' if plopper == 0 else 'pleb'
         return 'Ignored %s deleted %s (<10k '%(numDel, _pluralize('post', numDel)) \
-                + plopStr + '). ', nonDeleted
+               + plopStr + '). ', nonDeleted
     return '', nonDeleted
 
 def _openSentinel(reports):
@@ -103,7 +108,7 @@ def OpenReports(mode, user, client, amount, back, where):
     source = 'copypastor' if where == 'gutty' else client.host
     reports = _getData(source)
     curr = [v['name'] for v in reports] if where != 'gutty' \
-            else [v['post_id'] for v in reports]
+        else [v['post_id'] for v in reports]
 
     if where == 'sentinel':
         for v in reports:
@@ -139,9 +144,9 @@ def OpenReports(mode, user, client, amount, back, where):
                     msg += 'All reports have been tended to.'
                 else:
                     msg += 'There ' + ('is ' if len(curr) == 1 else 'are ') + str(len(curr)) \
-                            + ' unhandled ' + ('report' if len(curr) == 1 else 'reports') \
-                            + ', %s of which '%numIgnored \
-                            + ('is' if numIgnored == 1 else 'are') + ' on your ignore list.'
+                           + ' unhandled ' + ('report' if len(curr) == 1 else 'reports') \
+                           + ', %s of which '%numIgnored \
+                           + ('is' if numIgnored == 1 else 'are') + ' on your ignore list.'
                 return msg
             else:
                 if amount:
@@ -162,4 +167,3 @@ def OpenReports(mode, user, client, amount, back, where):
                 else:
                     msg += 'Opened %s [report%s](%s).'%(len(good),'' if len(good) == 1 else 's', report)
                 return msg
-

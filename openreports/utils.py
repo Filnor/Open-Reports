@@ -38,7 +38,6 @@ class utils:
             utils.log_message(message)
         self.client.get_room(self.room_number).send_message(message, length_check)
 
-    @staticmethod
     def alias_valid(self, alias):
         """
         Check if the specified alias is valid
@@ -97,10 +96,6 @@ class utils:
         """
         if isinstance(message, MessagePosted) or isinstance(message, MessageEdited):
             main_logger.info(f"Message #{message._message_id} was posted by '{message.user.name}' (in room '{message.room.name}')")
-
-    @staticmethod
-    def pluralize(word, amount):
-        return word if amount == 1 else word + 's'
 
 MessagePosted.reply_to = lambda self, reply: self.message.reply(reply)
 MessageEdited.reply_to = lambda self, reply: self.message.reply(reply)

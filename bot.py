@@ -240,9 +240,7 @@ def on_message(message, client):
             if len(words) > 3 and words[2] in ['b', 'back']:
                 from_the_back = True
                 #Class method call
-        elif full_command in ["o", "open", "ir", "ignore rest", "fa", "fetch amount"]:
-            utils.post_message("This command is currently not available due to refactoring")
-
+        elif full_command.startswith(("o", "open", "ir", "ignore rest", "fa", "fetch amount")):
             location = Locations.Natty
             if 'sentinel' in words or 's' in words:
                 location = Locations.Sentinel
@@ -250,14 +248,14 @@ def on_message(message, client):
                 if location is Locations.Natty:
                     location = Locations.Guttenberg
 
-            #reports = OpenReports(utils.client.get_me(), utils, amount, from_the_back, utils.client.host, location)
+            reports = OpenReports(utils.client.get_me(), utils, 0, False, utils.client.host, location)
 
-            if command in ["o", "open"]:
+            if full_command.startswith(("o", "open")):
                 pass
-            elif command in ["ir", "ignore rest"]:
+            elif full_command.startswith(("ir", "ignore rest")):
                 pass
-            elif command in ["fa", "fetch amount"]:
-                pass
+            elif full_command.startswith(("fa", "fetch amount")):
+                message.reply_to(reports.fetch_amount())
 
     except BaseException as e:
         main_logger.error(f"CRITICAL ERROR: {e}")

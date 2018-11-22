@@ -1,6 +1,7 @@
 import json
 from random import randrange
 import requests
+
 from openreports.locations import Locations
 
 class OpenReports:
@@ -10,6 +11,7 @@ class OpenReports:
 
     def __init__(self, user, utils, amount, back, host, location = Locations.Natty):
         self.user = user
+        self.is_pleb = self.user.reputation < 10000 # Plebs = People who can't view deleted posts since they have less than 10k rep
         self.utils = utils
         self.amount = amount
         self.from_back = back
@@ -18,22 +20,19 @@ class OpenReports:
         self.reports = None
         self.which_ignore_list = None
 
-
-    def fetch_posts(self):
-        is_pleb = self.user.reputation < 10000 # Plebs = People who can't view deleted posts since they have less than 10k rep
-
-        ignorefile_name = f"{self.user.id}{self.host}.ignorelist"
-        whichIL = "gutty" if self.location is Locations.Guttenberg else ""
-        source = "copypastor" if self.location == Locations.Guttenberg else self.host # Set the API from which the reports should be fetched
-
-        reports = self.get_reports(source)
-        self.reports = [r["name"] for r in reports] if self.location != Locations.Guttenberg else [r["post_id"] for r in reports]
-
-        if self.location == Locations.Sentinel:
-            for r in reports:
-                r["link"] = f"https://sentinel.erwaysoftware.com/posts/aid/{r['name']}" #Change post links (from Natty) to Sentinel links
-
         #TODO: Port legacy code to new architecture
+
+    def fetch_amount(self):
+        reports = self.get_reports(self._get_source())
+        report_count = len(reports)
+
+        if report_count == 0:
+            return "All reports have been tended to."
+        else:
+            pleb_str = ""
+            if self.is_pleb:
+                pleb_str = f"Ignored {0} deleted posts (<10k {self._pleb_or_plop()}). "
+            return f"{pleb_str}There {self.pluralize('is', report_count)} {report_count} unhandled {self.pluralize('report', report_count)}, {0} of which {self.pluralize('is', 0)} on your ignore list."
 
     def get_reports(self, source):
         """
@@ -50,9 +49,21 @@ class OpenReports:
         #CopyPastor returns the reports in the "posts" property and NAPI in the "items" property
         return data['posts'] if source is "copypastor" else data['items']
 
-
+    def _get_source(self):
+        """
+        Set the API from which the reports should be fetched
+        :return: Which API
+        """
+        return "copypastor" if self.location == Locations.Guttenberg else self.host
 
     @staticmethod
-    def _pleb_or_plop(self):
+    def pluralize(word, amount):
+        plurarized = word + 's'
+        if word == "is":
+            return "is" if amount == 1 else "are"
+        return word if amount == 1 else plurarized
+
+    @staticmethod
+    def _pleb_or_plop():
         num = randrange(100)
         return "plop" if num == 0 else "pleb"
